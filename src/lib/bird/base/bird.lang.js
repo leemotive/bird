@@ -1,5 +1,6 @@
 define(function(require) {
-
+	var logger = require('./bird.logger');
+	
 	function Lang() {
 
 	}
@@ -262,7 +263,7 @@ define(function(require) {
 
 		this.getVariableInContext = function(s, ctx) {
 			if (!this.isObject(ctx)) {
-				console.warn('Parameter `ctx` of `lang.getVariableInContext(s, ctx)` is not an object.');
+				logger.warn('Parameter `ctx` of `lang.getVariableInContext(s, ctx)` is not an object.');
 				return null;
 			}
 			if (s.indexOf('.') === -1) {
@@ -273,7 +274,7 @@ define(function(require) {
 			for (var i = 0, len = segments.length; i < len; i++) {
 				var namespace = ctx[segments[i]];
 				if (namespace == null && i !== len - 1) {
-					console.warn('Variable: `' + segments.slice(0, i + 1).join('.') + '` has no value.');
+					logger.warn('Variable: `' + segments.slice(0, i + 1).join('.') + '` has no value.');
 					return;
 				}
 				ctx = namespace;
@@ -283,7 +284,7 @@ define(function(require) {
 
 		this.setVariableInContext = function(s, value, ctx) {
 			if (!this.isObject(ctx)) {
-				console.warn('Parameter `ctx` of `lang.setVariableInContext(s, value, ctx)` is not an object.');
+				logger.warn('Parameter `ctx` of `lang.setVariableInContext(s, value, ctx)` is not an object.');
 				return null;
 			}
 			var lastDotIndex = s.lastIndexOf('.');
@@ -366,6 +367,13 @@ define(function(require) {
 		this.nextTick = window.setImmediate ? setImmediate.bind(window) : function(callback) {
 			setTimeout(callback, 0) //IE10-11 or W3C
 		};
+
+		this.bind = function bind(fn, ctx) {
+	    return function (a) {
+	      var l = arguments.length;
+	      return l ? l > 1 ? fn.apply(ctx, arguments) : fn.call(ctx, a) : fn.call(ctx);
+	    };
+	  };
 
 		function noop() {};
 

@@ -2,7 +2,7 @@
  * @file: bird.js
  * @author: liwei47@baidu.com
  * @version: 1.0.1
- * @date: 2016-06-05
+ * @date: 2016-12-13
  */
 /**
  *	封装LRU cache为独立模块
@@ -929,7 +929,7 @@ define("bird.accmath", [], function(require) {
             n = r1 >= r2 ? r1 : r2;
             return Number(((a * m - b * m) / m).toFixed(n));
         };
-        this.multipe = function(a, b) {
+        this.multiple = function(a, b) {
             var m = 0, s1 = a.toString(), s2 = b.toString();
             try {
                 m += s1.split(".")[1].length;
@@ -1350,9 +1350,10 @@ define("bird.animate", [ "./bird.lang", "./bird.dom", "./bird.animation" ], func
     }).call(Animate.prototype);
     return new Animate();
 });
-define("bird.animation", [ "./bird.lang", "./bird.dom", "./bird.requestframe", "./bird.tween" ], function(require) {
+define("bird.animation", [ "./bird.lang", "./bird.dom", "./bird.logger", "./bird.requestframe", "./bird.tween" ], function(require) {
     var lang = require("./bird.lang");
     var dom = require("./bird.dom");
+    var logger = require("./bird.logger");
     var reqFrame = require("./bird.requestframe");
     /**
 	 *       elem:   element will animate
@@ -1473,7 +1474,7 @@ define("bird.animation", [ "./bird.lang", "./bird.dom", "./bird.requestframe", "
                                 self.cprop[i] = self.$cprop[i] + (self.$props[i] - self.$cprop[i]) * self.pos + self.units[i];
                                 //self.cssText = css(self.cssText, self.cprop, i);
                                 self.elem.style[i] = self.cprop[i];
-                                console.log(self.elem.style[i]);
+                                logger.log(self.elem.style[i]);
                             }
                         }
                         if (self.hasTransform) {
@@ -3790,7 +3791,8 @@ define("bird.event", [ "./bird.lang", "./bird.object", "./bird.util", "./bird.ar
     }).call(EventListner.prototype);
     return new EventListner();
 });
-define("bird.lang", [], function(require) {
+define("bird.lang", [ "./bird.logger" ], function(require) {
+    var logger = require("./bird.logger");
     function Lang() {}
     (function() {
         /*********************************************************************
@@ -4007,7 +4009,7 @@ define("bird.lang", [], function(require) {
         };
         this.getVariableInContext = function(s, ctx) {
             if (!this.isObject(ctx)) {
-                console.warn("Parameter `ctx` of `lang.getVariableInContext(s, ctx)` is not an object.");
+                logger.warn("Parameter `ctx` of `lang.getVariableInContext(s, ctx)` is not an object.");
                 return null;
             }
             if (s.indexOf(".") === -1) {
@@ -4017,7 +4019,7 @@ define("bird.lang", [], function(require) {
             for (var i = 0, len = segments.length; i < len; i++) {
                 var namespace = ctx[segments[i]];
                 if (namespace == null && i !== len - 1) {
-                    console.warn("Variable: `" + segments.slice(0, i + 1).join(".") + "` has no value.");
+                    logger.warn("Variable: `" + segments.slice(0, i + 1).join(".") + "` has no value.");
                     return;
                 }
                 ctx = namespace;
@@ -4026,7 +4028,7 @@ define("bird.lang", [], function(require) {
         };
         this.setVariableInContext = function(s, value, ctx) {
             if (!this.isObject(ctx)) {
-                console.warn("Parameter `ctx` of `lang.setVariableInContext(s, value, ctx)` is not an object.");
+                logger.warn("Parameter `ctx` of `lang.setVariableInContext(s, value, ctx)` is not an object.");
                 return null;
             }
             var lastDotIndex = s.lastIndexOf(".");
@@ -4093,9 +4095,113 @@ define("bird.lang", [], function(require) {
         this.nextTick = window.setImmediate ? setImmediate.bind(window) : function(callback) {
             setTimeout(callback, 0);
         };
+        this.bind = function bind(fn, ctx) {
+            return function(a) {
+                var l = arguments.length;
+                return l ? l > 1 ? fn.apply(ctx, arguments) : fn.call(ctx, a) : fn.call(ctx);
+            };
+        };
         function noop() {}
     }).call(Lang.prototype);
     return new Lang();
+});
+define("bird.logger", [], function(require) {
+    if (typeof window.console === "undefined") {
+        function DivConsole() {
+            var div = document.createElement("div");
+            div.style.position = "absolute";
+            div.style.top = "0px";
+            div.style.padding = "10px";
+            div.style.backgroundColor = "#eee";
+            div.style.filter = "alpha(opacity=80)";
+            div.style.border = "dotted 2px red";
+            div.style.color = "black";
+            div.zIndex = 999999999;
+            document.body.appendChild(div);
+            this.contentDiv = div;
+            div = null;
+        }
+        (function() {
+            this.log = function(s, color) {
+                var rs;
+                if (!isPlainObject(s) && !isArray(s)) {
+                    var strarr = s.split("%c");
+                    var ret = [];
+                    var _arguments = arguments;
+                    util.forEach(strarr, function(str, index, strarr) {
+                        if (!index && str) {
+                            ret.push(str);
+                        } else {
+                            ret.push('<span style="' + _arguments[index] + '">', str, "</span>");
+                        }
+                    });
+                    rs = ret.join("");
+                } else {
+                    rs = JSON.stringify(s);
+                }
+                var div = document.createElement("div");
+                div.innerHTML = rs;
+                this.contentDiv.appendChild(div);
+                div = _arguments = null;
+            };
+            this.dir = this.info = this.warn = this.error = this.log;
+        }).call(DivConsole.prototype);
+        window.console = new DivConsole();
+    }
+    function getType(p) {
+        if (typeof p === "undefined") {
+            return "Undefined";
+        }
+        if (p === null) {
+            return "Null";
+        }
+        return Object.prototype.toString.call(p).slice(8, -1);
+    }
+    function isArray(p) {
+        return Array.isArray ? Array.isArray(p) : getType(p) === "Array";
+    }
+    function isPlainObject(p) {
+        return getType(p) === "Object";
+    }
+    var levelMap = {
+        INFO: 1,
+        WARN: 2,
+        ERROR: 3,
+        FATAL: 4
+    };
+    function Logger() {
+        this.level = "INFO";
+    }
+    (function() {
+        this.setLevel = function(level) {
+            this.level = level;
+        };
+        this.setDefaultLevel = function() {
+            this.level = "INFO";
+        };
+        this.info = function() {
+            if (levelMap[this.level] < 2) {
+                console.log.apply(console, arguments);
+            }
+        };
+        this.log = this.info;
+        this.warn = function() {
+            if (levelMap[this.level] < 3) {
+                console.warn.apply(console, arguments);
+            }
+        };
+        this.error = function() {
+            if (levelMap[this.level] < 4) {
+                console.error.apply(console, arguments);
+            }
+        };
+        this.dir = function() {
+            if (levelMap[this.level] < 2) {
+                console.dir.apply(console, arguments);
+            }
+        };
+    }).call(Logger.prototype);
+    return new Logger();
 });
 define("bird.lrucache", [ "./bird.__lrucache__" ], function(require) {
     var LRUCache = require("./bird.__lrucache__");
@@ -4408,7 +4514,7 @@ define("bird.random", [], function(require) {
     }).call(Random.prototype);
     return new Random();
 });
-define("bird.request", [ "./bird.dom", "./bird.lang", "./bird.array", "./bird.string", "./bird.util", "./bird.object", "./bird.date" ], function(require) {
+define("bird.request", [ "./bird.dom", "./bird.lang", "./bird.array", "./bird.string", "./bird.util", "./bird.object", "./bird.date", "./bird.logger" ], function(require) {
     var dom = require("./bird.dom");
     var lang = require("./bird.lang");
     var array = require("./bird.array");
@@ -4416,6 +4522,7 @@ define("bird.request", [ "./bird.dom", "./bird.lang", "./bird.array", "./bird.st
     var util = require("./bird.util");
     var object = require("./bird.object");
     var date = require("./bird.date");
+    var logger = require("./bird.logger");
     /*********************************************************************
      *                             ajax/jsonp
      ********************************************************************/
@@ -4475,7 +4582,7 @@ define("bird.request", [ "./bird.dom", "./bird.lang", "./bird.array", "./bird.st
                 }
             }
             if (!xhr) {
-                console.warn("Your browser not support" + (arg.crossDomain ? " CrossDomain " : " ") + "XmlHttpRequest!");
+                logger.warn("Your browser not support" + (arg.crossDomain ? " CrossDomain " : " ") + "XmlHttpRequest!");
                 return;
             }
             //define default arguments
@@ -4951,9 +5058,8 @@ define("bird.string", [], function(require) {
     }).call(_String.prototype);
     return new _String();
 });
-define("bird.syspatch", [ "./bird.util", "./bird.lang" ], function(require) {
+define("bird.syspatch", [ "./bird.util" ], function(require) {
     var util = require("./bird.util");
-    var lang = require("./bird.lang");
     /*********************************************************************
 	 *                             系统函数补丁
 	 ********************************************************************/
@@ -4971,58 +5077,19 @@ define("bird.syspatch", [ "./bird.util", "./bird.lang" ], function(require) {
         };
     }
     /**
-	 * 保证console在语法上可行
+	 * 增强bind实现
 	 */
-    if (ctx.DEBUG && typeof ctx.console === "undefined") {
-        var Console = function() {
-            var div = document.createElement("div");
-            div.style.position = "absolute";
-            div.style.top = "0px";
-            div.style.padding = "10px";
-            div.style.backgroundColor = "#eee";
-            div.style.filter = "alpha(opacity=80)";
-            div.style.border = "dotted 2px red";
-            div.style.color = "black";
-            div.zIndex = 999999999;
-            document.body.appendChild(div);
-            this.contentDiv = div;
-            div = null;
+    !Function.prototype.bind && (Function.prototype.bind = function(oThis) {
+        if (typeof this !== "function") {
+            throw new TypeError("Function.prototype.bind - what is trying to be bound is not callable");
+        }
+        var aArgs = Array.prototype.slice.call(arguments, 1), fToBind = this, fNOP = function() {}, fBound = function() {
+            return fToBind.apply(this instanceof fNOP && oThis ? this : oThis || window, aArgs.concat(Array.prototype.slice.call(arguments)));
         };
-        (function() {
-            this.log = function(s, color) {
-                var rs;
-                if (!lang.isPlainObject(s) && !lang.isArray(s)) {
-                    var strarr = s.split("%c");
-                    var ret = [];
-                    var _arguments = arguments;
-                    util.forEach(strarr, function(str, index, strarr) {
-                        if (!index && str) {
-                            ret.push(str);
-                        } else {
-                            ret.push('<span style="' + _arguments[index] + '">', str, "</span>");
-                        }
-                    });
-                    rs = ret.join("");
-                } else {
-                    rs = JSON.stringify(s);
-                }
-                var div = document.createElement("div");
-                div.innerHTML = rs;
-                this.contentDiv.appendChild(div);
-                div = _arguments = null;
-            };
-            this.info = this.warn = this.error = this.log;
-        }).call(Console.prototype);
-        ctx.console = new Console();
-    }
-    if (!ctx.DEBUG) {
-        ctx.console = {
-            log: lang.noop,
-            warn: lang.noop,
-            info: lang.noop,
-            error: lang.noop
-        };
-    }
+        fNOP.prototype = this.prototype;
+        fBound.prototype = new fNOP();
+        return fBound;
+    });
 });
 define("bird.template", [ "./bird.dom" ], function(require) {
     /*********************************************************************
@@ -5660,10 +5727,11 @@ define("bird.applicationcontext", [], function(require) {
  * 负责查找具体Action的调用
  *
  */
-define("bird.controller", [ "./bird.router", "bird.lang", "bird.array", "./bird.action" ], function(require) {
+define("bird.controller", [ "./bird.router", "bird.lang", "bird.array", "bird.logger", "./bird.action" ], function(require) {
     var router = require("./bird.router");
     var lang = require("bird.lang");
     var array = require("bird.array");
+    var logger = require("bird.logger");
     var Action = require("./bird.action");
     function Controller() {
         this.actionInstanceCache = {};
@@ -5672,7 +5740,7 @@ define("bird.controller", [ "./bird.router", "bird.lang", "bird.array", "./bird.
         this.start = function() {
             router.start();
             this.initActionListener();
-            console.log("bird.controller started!");
+            logger.log("bird.controller started!");
         };
         //调度指定的Action并启动Action
         this.dispatch = function(name, data) {
@@ -6214,10 +6282,11 @@ define("bird.handlemap", [ "bird.dom", "bird.lang", "bird.array", "bird.event", 
     }).call(HandleMap.prototype);
     return new HandleMap();
 });
-define("bird.model", [ "bird.lang", "bird.array", "bird.object", "bird.__observer__" ], function(require) {
+define("bird.model", [ "bird.lang", "bird.array", "bird.object", "bird.logger", "bird.__observer__" ], function(require) {
     var lang = require("bird.lang");
     var array = require("bird.array");
     var object = require("bird.object");
+    var logger = require("bird.logger");
     var Observer = require("bird.__observer__");
     function Model() {
         this.watcher = new Observer();
@@ -6281,7 +6350,7 @@ define("bird.model", [ "bird.lang", "bird.array", "bird.object", "bird.__observe
                 var lastDotIndex = v.lastIndexOf(".");
                 if (lastDotIndex !== -1) {
                     if (lastDotIndex !== v.indexOf(".")) {
-                        console.warn('Only support filter key like "a" or "a.b", and "a.b.c" which dot number more than 1 is not supported!');
+                        logger.warn('Only support filter key like "a" or "a.b", and "a.b.c" which dot number more than 1 is not supported!');
                         return;
                     }
                     var arr = v.split(".");
@@ -6321,11 +6390,12 @@ define("bird.model", [ "bird.lang", "bird.array", "bird.object", "bird.__observe
  * 后台数据请求助手, 服务于bird.action
  * restful style
  */
-define("bird.requesthelper", [ "bird.object", "bird.array", "bird.request", "bird.string" ], function(require) {
+define("bird.requesthelper", [ "bird.object", "bird.array", "bird.request", "bird.string", "bird.logger" ], function(require) {
     var object = require("bird.object");
     var array = require("bird.array");
     var request = require("bird.request");
     var string = require("bird.string");
+    var logger = require("bird.logger");
     function RequestHelper() {}
     (function() {
         /**
@@ -6380,11 +6450,11 @@ define("bird.requesthelper", [ "bird.object", "bird.array", "bird.request", "bir
                 var reqType = arr && arr[0];
                 var url = arr && arr[1];
                 if (!reqType) {
-                    console.warn("模块: `" + modName + "`, 数据请求方法: `" + key + "` 缺少请求类型!");
+                    logger.warn("模块: `" + modName + "`, 数据请求方法: `" + key + "` 缺少请求类型!");
                     return;
                 }
                 if (!url) {
-                    console.warn("模块: `" + modName + "`, 数据请求方法: `" + key + "` 缺少请求URL!");
+                    logger.warn("模块: `" + modName + "`, 数据请求方法: `" + key + "` 缺少请求URL!");
                     return;
                 }
                 me[methodName] = function(data, completeCallback, errorCallback) {
@@ -6418,7 +6488,7 @@ define("bird.requesthelper", [ "bird.object", "bird.array", "bird.request", "bir
     }).call(RequestHelper.prototype);
     return RequestHelper;
 });
-define("bird.router.hashchange", [ "bird.event", "bird.__observer__", "bird.lang", "bird.object" ], function(require) {
+define("bird.router.hashchange", [ "bird.event", "bird.__observer__", "bird.lang", "bird.object", "bird.logger" ], function(require) {
     function Router() {
         this.notFoundActionMap = null;
         this.locationMap = {};
@@ -6428,6 +6498,7 @@ define("bird.router.hashchange", [ "bird.event", "bird.__observer__", "bird.lang
         var Observer = require("bird.__observer__");
         var lang = require("bird.lang");
         var object = require("bird.object");
+        var logger = require("bird.logger");
         this.actionObserver = new Observer();
         /*********************************************************************
 		 *                             控制器
@@ -6435,7 +6506,7 @@ define("bird.router.hashchange", [ "bird.event", "bird.__observer__", "bird.lang
         this.start = function() {
             this.watchHash();
             this.bootFirstUrl();
-            console.log("bird.router[use hashChange] started!");
+            logger.log("bird.router[use hashChange] started!");
         };
         this.changeHash = function(hash) {
             hash = hash.replace(/^#/, "");
@@ -6547,7 +6618,7 @@ define("bird.router.hashchange", [ "bird.event", "bird.__observer__", "bird.lang
     }).call(Router.prototype);
     return new Router();
 });
-define("bird.router.ie7support", [ "bird.event", "bird.browser", "bird.lang", "bird.__observer__", "bird.object" ], function(require) {
+define("bird.router.ie7support", [ "bird.event", "bird.browser", "bird.lang", "bird.__observer__", "bird.object", "bird.logger" ], function(require) {
     function Router() {
         this.notFoundActionMap = null;
         this.locationMap = {};
@@ -6558,6 +6629,7 @@ define("bird.router.ie7support", [ "bird.event", "bird.browser", "bird.lang", "b
         var lang = require("bird.lang");
         var Observer = require("bird.__observer__");
         var object = require("bird.object");
+        var logger = require("bird.logger");
         this.actionObserver = new Observer();
         /*********************************************************************
 		 *                             控制器
@@ -6566,7 +6638,7 @@ define("bird.router.ie7support", [ "bird.event", "bird.browser", "bird.lang", "b
             this.init();
             this.watchHash();
             this.bootFirstUrl();
-            console.log("bird.router[ie7support] started!");
+            logger.log("bird.router[ie7support] started!");
         };
         this.init = function() {
             var ieVersion = /ie\s*(\d+)/.exec(browser.browser);
@@ -6764,7 +6836,7 @@ define("bird.router", [ "./bird.router.hashchange" ], function(require) {
     //return history.pushState ? require('./bird.router.pushstate') : require('./bird.router.hashchange');
     return require("./bird.router.hashchange");
 });
-define("bird.router.pushstate", [ "bird.event", "bird.__observer__", "bird.lang", "bird.object" ], function(require) {
+define("bird.router.pushstate", [ "bird.event", "bird.__observer__", "bird.lang", "bird.object", "bird.logger" ], function(require) {
     function Router() {
         this.notFoundActionMap = null;
         this.locationMap = {};
@@ -6774,6 +6846,7 @@ define("bird.router.pushstate", [ "bird.event", "bird.__observer__", "bird.lang"
         var Observer = require("bird.__observer__");
         var lang = require("bird.lang");
         var object = require("bird.object");
+        var logger = require("bird.logger");
         this.actionObserver = new Observer();
         /*********************************************************************
 		 *                             控制器
@@ -6781,7 +6854,7 @@ define("bird.router.pushstate", [ "bird.event", "bird.__observer__", "bird.lang"
         this.start = function() {
             this.watchLocation();
             this.bootFirstUrl();
-            console.log("bird.router[use pushState] started!");
+            logger.log("bird.router[use pushState] started!");
         };
         this.changeLocation = function(loc) {
             loc = loc.replace(/^#!/, "");
@@ -7753,13 +7826,14 @@ define("bird.validator", [ "bird.lang", "bird.string", "bird.array", "bird.objec
     }).call(Validator.prototype);
     return new Validator();
 });
-define("errorTrack", [ "bird.event", "bird.object", "bird.dom", "bird.browser", "bird.array", "bird.request" ], function(require) {
+define("errorTrack", [ "bird.event", "bird.object", "bird.dom", "bird.browser", "bird.array", "bird.request", "bird.logger" ], function(require) {
     var event = require("bird.event");
     var object = require("bird.object");
     var dom = require("bird.dom");
     var browser = require("bird.browser");
     var array = require("bird.array");
     var request = require("bird.request");
+    var logger = require("bird.logger");
     var clickPathList = [];
     var lastClickData;
     var config = {
@@ -7792,7 +7866,7 @@ define("errorTrack", [ "bird.event", "bird.object", "bird.dom", "bird.browser", 
                 me.send(me.getErrorInfo(e));
                 me.clear();
             });
-            console.log("ErrorTrack Module Inited!");
+            logger.log("ErrorTrack Module Inited!");
         },
         clear: function() {
             clickPathList = [];
